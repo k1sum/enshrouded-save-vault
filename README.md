@@ -1,5 +1,7 @@
 # 雾锁存档助手 1.0.0
 
+**中文** | [English](README.en.md) · [版本说明](docs/release-notes/v1.0.0.md) · [更新记录](CHANGELOG.md)
+
 雾锁王国（Enshrouded）多人世界的共享存档工具。你、A、B 轮流恢复同一个世界并当房主；Linux 服务器只保存备份，不运行游戏。
 
 - **Windows 客户端**：一个 `.exe`，自带 .NET 运行时和界面库，**下载后双击即用，无需安装任何依赖**，也不需要管理员权限。

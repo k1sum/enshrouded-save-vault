@@ -1,4 +1,6 @@
-# 更新记录
+# 更新记录 / Changelog
+
+每个版本的完整中英文说明见 [docs/release-notes](docs/release-notes)。Full bilingual notes for each version are in [docs/release-notes](docs/release-notes).
 
 ## 1.0.0
 
