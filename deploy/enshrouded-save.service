@@ -1,0 +1,30 @@
+[Unit]
+Description=Enshrouded private save vault
+After=network.target
+
+[Service]
+Type=simple
+User=enshrouded-save
+Group=enshrouded-save
+StateDirectory=enshrouded-save
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/enshrouded-save
+ExecStart=/opt/enshrouded-save/save-server --data /var/lib/enshrouded-save serve
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/enshrouded-save
+
+[Install]
+WantedBy=multi-user.target

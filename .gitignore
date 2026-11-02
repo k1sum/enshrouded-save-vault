@@ -1,0 +1,28 @@
+# Build output
+.build/
+dist/
+out/
+**/bin/
+**/obj/
+*.pdb
+
+# Local data and logs (demo worlds, server state, client state)
+data/
+*.log
+
+# Secrets must never be committed: access codes, keys, local environment files
+*.token
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+
+# Editor / OS
+.DS_Store
+*.user
+.vs/
+.vscode/
+.idea/
+.claude/
