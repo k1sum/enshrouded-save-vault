@@ -2,6 +2,14 @@
 
 每个版本的完整中英文说明见 [docs/release-notes](docs/release-notes)。Full bilingual notes for each version are in [docs/release-notes](docs/release-notes).
 
+## 1.1.1
+
+- 新增应用图标：Windows EXE、窗口和任务栏、macOS 应用都使用橙色“雾”字图标；EXE 属性里显示产品名称和说明。
+- 窗口标题、主界面和设置里显示客户端版本号。
+- 设置第 2 步显示世界格式；选了旧格式世界而目录里是 `worldN.ksd` 时，说明为什么没有世界文件列表、该怎么做，不再静默隐藏。
+- 主界面遇到同样的不匹配时，卡片直接提示原因和解决办法，并暂停恢复。
+- 服务器上还没有世界时，验证连接后提示管理员用 `--save-key world.ksd` 建立世界。
+
 ## 1.1.0
 
 - 支持游戏 1.0 的 `worldN.ksd` 存档：服务器世界标识 `world.ksd`，每台电脑选择自己的世界编号，云端统一保存为 `world.ksd`，跨编号恢复。

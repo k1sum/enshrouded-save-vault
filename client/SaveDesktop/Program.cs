@@ -48,7 +48,7 @@ public sealed class App : Application
     private static Window AlreadyRunningWindow()
     {
         var ok = Primary(Btn("知道了")); ok.HorizontalAlignment = HorizontalAlignment.Right;
-        var window = new Window { Title = "雾锁存档助手", Width = 380, SizeToContent = SizeToContent.Height, CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterScreen, FontFamily = Sans, FontSize = 13 };
+        var window = new Window { Title = "雾锁存档助手", Width = 380, SizeToContent = SizeToContent.Height, CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterScreen, FontFamily = Sans, FontSize = 13, Icon = AppIcon };
         window.Content = Stack(18, Row(12, Mark(32), Text("存档助手已经在运行，请使用已经打开的窗口。", 13.5)), ok); ((StackPanel)window.Content).Margin = new Thickness(24, 22);
         Dyn(window, Window.BackgroundProperty, Surface); ok.Click += (_, _) => window.Close(); return window;
     }

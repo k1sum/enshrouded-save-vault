@@ -39,6 +39,9 @@ internal static class SetupDialog
         List<int> slotList = [];
         var slotNote = Text("游戏 1.0 里每个世界是一个 worldN.ksd，编号在每台电脑上可能不同。请选择与共享世界对应的那个文件；本机还没有这个世界就选“新建”，之后从云端恢复。角色（character*.ksd）、global.ksd、backup/、migrated/ 不会被上传或覆盖。", 11.5, color: Faint);
         var slotBlock = Stack(8, Label("这台电脑上的世界文件"), slots, slotNote); slotBlock.IsVisible = false;
+        // Says which save format the chosen world uses, and why there is no world-file list when it does not fit this folder.
+        var worldFormat = Text("", 11.5, color: Faint); worldFormat.IsVisible = false;
+        var mismatch = Text("", 12, color: Danger); mismatch.IsVisible = false;
         var inspect = Btn("检查文件清单", Icons.Search);
         var preview = Text("", 12, color: Muted); preview.FontFamily = Mono;
         var previewBox = Box(Bg, Line); previewBox.Padding = new Thickness(14, 12); previewBox.CornerRadius = new CornerRadius(10); previewBox.Child = new ScrollViewer { Content = preview, MaxHeight = 140 }; previewBox.IsVisible = false;
@@ -53,11 +56,12 @@ internal static class SetupDialog
         var content = Stack(12,
             Text("每位玩家用自己的访问码。访问码保存在这台电脑的系统凭据中，不会写进配置文件。", 12.5, color: Muted),
             Step(1, "服务器与访问码"), Label("服务器 HTTPS 地址"), server, Label("个人访问码"), token, Columns("Auto,*", verify, identity),
-            Step(2, "共享世界"), worlds,
-            Step(3, "本地存档目录"), Columns("*,Auto", folder, browse), foundBlock, slotBlock, inspect, previewBox,
+            Step(2, "共享世界"), worlds, worldFormat,
+            Step(3, "本地存档目录"), Columns("*,Auto", folder, browse), foundBlock, mismatch, slotBlock, inspect, previewBox,
             Step(4, "确认"), filesOk, cloudOk, cloudNote, error);
         ((Grid)content.Children[6]).ColumnSpacing = 12; identity.VerticalAlignment = VerticalAlignment.Center;
-        var window = Dialog(owner, current.Configured ? "连接设置" : "首次设置", content, Buttons(cancel, save), 580, 700);
+        var versionLine = Text($"客户端版本 {AppVersion}", 11, color: Faint); versionLine.Margin = new Thickness(0, 6, 0, 0); content.Children.Add(versionLine);
+        var window = Dialog(owner, (current.Configured ? "连接设置" : "首次设置") + $" · v{AppVersion}", content, Buttons(cancel, save), 580, 700);
         void Fail(string message) { error.Text = message; error.IsVisible = true; }
         void ResetFiles() { inspected = null; filesOk.IsChecked = false; previewBox.IsVisible = false; }
         WorldInfo? World() => worlds.SelectedIndex >= 0 && worlds.SelectedIndex < worldList.Count ? worldList[worlds.SelectedIndex] : null;
@@ -65,6 +69,11 @@ internal static class SetupDialog
         void FillSlots()
         {
             var w = World(); var dir = folder.Text?.Trim() ?? ""; slotBlock.IsVisible = w?.SaveKey == SaveLayout.KsdKey;
+            worldFormat.IsVisible = w != null;
+            worldFormat.Text = w == null ? "" : w.SaveKey == SaveLayout.KsdKey ? "格式：游戏 1.0 世界（worldN.ksd），下面选择这台电脑上对应的文件。" : $"格式：抢先体验版世界（8 位标识 {w.SaveKey}）。游戏 1.0 的存档（worldN.ksd）需要管理员用 --save-key world.ksd 新建世界。";
+            List<KsdWorld> inFolder; try { inFolder = SaveRules.KsdWorlds(dir); } catch (Exception) { inFolder = []; }
+            mismatch.IsVisible = w != null && w.SaveKey != SaveLayout.KsdKey && inFolder.Count > 0;
+            mismatch.Text = $"这个目录里有 {inFolder.Count} 个游戏 1.0 世界文件（{string.Join("、", inFolder.Select(k => $"world{k.Slot}.ksd"))}），但第 2 步选的是旧格式世界，所以不会显示世界文件列表，也无法检查和恢复。请让管理员把服务端升级到 1.1.0 以上，用 --save-key world.ksd 新建世界，再点“验证连接”后选择它。";
             if (!slotBlock.IsVisible) { slotList = []; slots.ItemsSource = null; return; }
             List<KsdWorld> existing; try { existing = SaveRules.KsdWorlds(dir); } catch (Exception) { existing = []; }
             var free = Enumerable.Range(0, SaveLayout.MaxSlot + 1).First(n => existing.All(e => e.Slot != n));
@@ -86,7 +95,7 @@ internal static class SetupDialog
                 worlds.ItemsSource = worldList.Select(w => w.Name + (w.CanUpload ? "" : "（只读）")).ToList(); worlds.IsEnabled = worldList.Count > 0;
                 worlds.SelectedIndex = worldList.Count == 0 ? -1 : Math.Max(0, worldList.FindIndex(w => w.Id == current.World?.Id));
                 verifiedServer = (server.Text ?? "").Trim().TrimEnd('/'); verifiedToken = (token.Text ?? "").Trim();
-                identity.Text = $"已验证：{me.Identity.User.Name} · 访问码 {me.Identity.ExpiresAt.LocalDateTime:d} 到期" + (worldList.Count == 0 ? "\n还没有获得任何世界的权限，请联系管理员。" : "");
+                identity.Text = $"已验证：{me.Identity.User.Name} · 访问码 {me.Identity.ExpiresAt.LocalDateTime:d} 到期" + (worldList.Count == 0 ? "\n服务器上还没有你可以访问的世界。请让管理员用 vault world add … --save-key world.ksd 建立世界并授权，然后重新验证。" : "");
                 Dyn(identity, TextBlock.ForegroundProperty, Teal);
             }
             catch (Exception e) { Dyn(identity, TextBlock.ForegroundProperty, Muted); identity.Text = "未通过验证。"; Fail("连接没有成功：" + e.Message); }

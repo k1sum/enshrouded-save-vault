@@ -1,6 +1,6 @@
-# 雾锁存档助手 1.1.0
+# 雾锁存档助手 1.1.1
 
-**中文** | [English](README.en.md) · [版本说明](docs/release-notes/v1.1.0.md) · [更新记录](CHANGELOG.md)
+**中文** | [English](README.en.md) · [版本说明](docs/release-notes/v1.1.1.md) · [更新记录](CHANGELOG.md)
 
 雾锁王国（Enshrouded）多人世界的共享存档工具，支持游戏 1.0 的 `worldN.ksd` 存档，也兼容抢先体验版的旧格式。你、A、B 轮流恢复同一个世界并当房主；Linux 服务器只保存备份，不运行游戏。
 
@@ -16,22 +16,22 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| `EnshroudedSaveManager-1.1.0-win-x64.exe` | Windows 10/11 x64 客户端，双击运行 |
-| `save-server-1.1.0-linux-amd64` | 常见 x86_64 Linux 服务器 |
-| `save-server-1.1.0-linux-arm64` | ARM64 Linux 服务器 |
+| `EnshroudedSaveManager-1.1.1-win-x64.exe` | Windows 10/11 x64 客户端，双击运行 |
+| `save-server-1.1.1-linux-amd64` | 常见 x86_64 Linux 服务器 |
+| `save-server-1.1.1-linux-arm64` | ARM64 Linux 服务器 |
 
 Releases 由仓库里的 GitHub Actions 在推送 `v*` 标签时自动构建，构建过程不含任何密钥或访问码。EXE 目前没有代码签名，第一次运行时 Windows SmartScreen 可能提示“未知发布者”，选择“更多信息 → 仍要运行”。
 
 ## Windows：首次设置
 
-1. 双击 `EnshroudedSaveManager-1.1.0-win-x64.exe`，自动打开“首次设置”。
+1. 双击 `EnshroudedSaveManager-1.1.1-win-x64.exe`，自动打开“首次设置”。
 2. **服务器与访问码**：填写 `https://你的域名` 和管理员单独发给你的个人访问码，点“验证连接”，确认显示的是你自己的名字。
 3. **共享世界**：选择要一起玩的世界。
 4. **本地存档目录**：点下方找到的常见位置，或点“选择…”手动指定。游戏 1.0 有两种存档位置，在游戏的世界列表里分别显示为“本地”和“Steam 云”：
    - 本地：`%USERPROFILE%\Saved Games\keen games\Enshrouded\default`
    - Steam 云：Steam 安装目录下的 `userdata\<账号目录>\1203620\remote`（例如 `D:\Program Files (x86)\Steam\userdata\…\1203620\remote`）
    - 抢先体验版旧存档：`%USERPROFILE%\Saved Games\enshrouded`
-5. **这台电脑上的世界文件**（游戏 1.0 世界）：游戏 1.0 里每个世界是一个 `worldN.ksd`，编号在每台电脑上可能不同。列表按修改时间排列，选择与共享世界对应的那个文件；本机还没有这个世界就选“新建 worldN.ksd”，之后从云端恢复。首次设置不会自动选择，避免误把你自己的单人世界当成共享世界。
+5. **这台电脑上的世界文件**（游戏 1.0 世界）：游戏 1.0 里每个世界是一个 `worldN.ksd`，编号在每台电脑上可能不同。列表按修改时间排列，选择与共享世界对应的那个文件；本机还没有这个世界就选“新建 worldN.ksd”，之后从云端恢复。首次设置不会自动选择，避免误把你自己的单人世界当成共享世界。如果第 2 步选的是抢先体验版格式的世界，而目录里是 `worldN.ksd`，这里不会出现列表，而是提示让管理员新建 `world.ksd` 世界。窗口标题和设置底部会显示客户端版本号，方便确认用的是哪个版本。
 6. 点“检查文件清单”，核对会上传和恢复的文件，以及“保持不动”的文件。
 7. 勾选两项确认（文件组已核对、Steam Cloud 已处理），点“保存并连接”。
 
@@ -149,9 +149,9 @@ vault member grant --user user_b --library friends --write=false
 
 1.0.0 只认识抢先体验版的 8 位标识，无法管理游戏 1.0 的 `worldN.ksd`。升级顺序：
 
-1. **服务端**：备份数据目录，停止服务，替换为 1.1.0 的二进制，再启动。已有的世界和备份不受影响。
+1. **服务端**：备份数据目录，停止服务，替换为 1.1.1 的二进制，再启动。已有的世界和备份不受影响。
 2. **建立 1.0 世界**：`vault world add --id <新ID> --library friends --name <名称> --save-key world.ksd`。世界标识创建后不能修改，所以 1.0 世界需要新建，不要沿用旧的 8 位标识世界。
-3. **客户端**：每位玩家换成 1.1.0 的 EXE，在“设置”里选择新世界和自己电脑上的 `worldN.ksd`。
+3. **客户端**：每位玩家换成 1.1.1 的 EXE，在“设置”里选择新世界和自己电脑上的 `worldN.ksd`。
 4. **先用副本验证**：第一次交接前，先复制一份 `worldN.ksd` 到另一台电脑（可以换一个编号），确认游戏能在世界列表里看到并正常加载。
 
 ## 服务限制、备份和升级

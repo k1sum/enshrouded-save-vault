@@ -30,7 +30,7 @@ public sealed class MainWindow : Window
     private VaultClient? api;
     private LocalCheck? check;
     private MeResponse? me;
-    private bool busy, ready, resetting, gameRunning;
+    private bool busy, ready, resetting, gameRunning, formatMismatch;
     private int page = 1, total;
     private long snapshot;
     private string user = "me";
@@ -61,7 +61,7 @@ public sealed class MainWindow : Window
         this.demo = demo; this.real = real;
         guard = real?.Guard ?? new DemoGuard(); scanner = demo != null ? new(guard, TimeSpan.FromMilliseconds(400)) : new(guard);
         dataRoot = demo?.Root ?? real!.State.Root; state = real?.State ?? demo!.StateFor(user);
-        Title = "雾锁存档助手"; Width = 720; Height = 790; MinWidth = 600; MinHeight = 740; WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        Title = $"雾锁存档助手 {AppVersion}"; Icon = AppIcon; Width = 720; Height = 790; MinWidth = 600; MinHeight = 740; WindowStartupLocation = WindowStartupLocation.CenterScreen;
         FontFamily = Sans; FontSize = 13; Dyn(this, BackgroundProperty, Bg); Dyn(this, ForegroundProperty, Ink);
         LoadTheme();
         Primary(upload); Primary(use); foreach (var b in new[] { refresh, settingsButton, backupsButton, simulate }) Ghost(b);
@@ -72,7 +72,8 @@ public sealed class MainWindow : Window
         // Header: product, world, who you are (or the demo identity switch) and the appearance menu.
         worldText.Text = demo?.World.Name ?? "尚未设置共享世界"; worldText.VerticalAlignment = VerticalAlignment.Center;
         var worldLine = Row(8, worldText, demo != null ? Pill("本机试用", Muted, Raised) : identityPill);
-        var brand = Row(12, Mark(), Stack(3, Text("雾锁存档助手", 18, true), worldLine)); brand.VerticalAlignment = VerticalAlignment.Center;
+        var version = Text("v" + AppVersion, 11.5, color: Faint); version.VerticalAlignment = VerticalAlignment.Bottom; version.Margin = new Thickness(0, 0, 0, 3);
+        var brand = Row(12, Mark(), Stack(3, Row(8, Text("雾锁存档助手", 18, true), version), worldLine)); brand.VerticalAlignment = VerticalAlignment.Center;
         Ghost(themeButton); themeButton.Padding = new Thickness(8); themeButton.MinWidth = themeButton.MinHeight = 36; themeButton.VerticalAlignment = VerticalAlignment.Center;
         var themeMenu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight }; themeButton.Flyout = themeMenu; themeMenu.Opening += (_, _) => FillThemeMenu(themeMenu);
         ActualThemeVariantChanged += (_, _) => PaintThemeButton(); PaintThemeButton();
@@ -238,7 +239,7 @@ public sealed class MainWindow : Window
         ToolTip.SetTip(upload, settings.World?.CanUpload == false ? "你是只读成员，可以查看和恢复，但不能上传。" : null);
         // With unuploaded local progress, uploading is the next step; restoring would replace it, so it stops being the main action.
         var unsaved = check?.HasChanges == true || pending != null;
-        use.IsVisible = !unsaved; useQuiet.IsVisible = unsaved; use.IsEnabled = useQuiet.IsEnabled = enabled && !gameRunning && !recovery && api != null && Selected != null;
+        use.IsVisible = !unsaved; useQuiet.IsVisible = unsaved; use.IsEnabled = useQuiet.IsEnabled = enabled && !gameRunning && !recovery && !formatMismatch && api != null && Selected != null;
         previous.IsEnabled = enabled && page > 1; next.IsEnabled = enabled && page * PageSize < total;
         simulate.IsEnabled = enabled && demo != null && configured && File.Exists(Path.Combine(settings.SaveDirectory, settings.World!.SaveKey));
     }
@@ -295,11 +296,13 @@ public sealed class MainWindow : Window
     private async Task CheckAsync()
     {
         if (!settings.Configured) return;
-        check = null; SetLocal(Tone.Busy, "正在检查存档…", "对比上次恢复或上传的版本。"); UpdateButtons();
+        check = null; formatMismatch = false; SetLocal(Tone.Busy, "正在检查存档…", "对比上次恢复或上传的版本。"); UpdateButtons();
         try { check = await scanner.CheckAsync(settings, state); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             // A failed check is never "no changes": say why and keep upload disabled until a check succeeds.
+            // An Early Access world pointed at a folder of game 1.0 saves will never match; say what to do instead.
+            if (e.Message.Contains("没有找到这个世界的文件") && !settings.Layout.IsKsd && FolderHasKsdWorlds()) { formatMismatch = true; SetLocal(Tone.Problem, "这个世界是旧格式，和本机存档不匹配", $"当前世界使用抢先体验版的 8 位标识（{settings.World!.SaveKey}），但存档目录里是游戏 1.0 的 worldN.ksd。请让管理员用 --save-key world.ksd 新建世界（需要服务端 1.1.0 以上），再在“设置”里选择它。"); checkTime.Text = "检查于 " + DateTime.Now.ToString("HH:mm:ss"); Say("世界格式与本机存档不匹配。", true); return; }
             if (e.Message.Contains("没有找到这个世界的文件")) { SetLocal(Tone.Neutral, "本地还没有这份世界", "在下方选择一份云端存档并恢复，就可以接手当房主。"); checkTime.Text = "检查于 " + DateTime.Now.ToString("HH:mm:ss"); Say("本地没有这份世界的文件，可以先从云端恢复。"); return; }
             var title = e is DirectoryNotFoundException ? "找不到存档目录" : e.Message.Contains("游戏仍在运行") ? "游戏还在运行，暂时不能检查" : e.Message.Contains("仍在保存") ? "游戏还在保存存档" : e.Message.Contains("未完成的恢复") ? "上次恢复没有完成" : "检查没有完成";
             SetLocal(Tone.Problem, title, e.Message + " 本地进度尚未确认，暂不能上传。"); checkTime.Text = "检查失败于 " + DateTime.Now.ToString("HH:mm:ss"); Say("本地检查没有完成：" + e.Message, true); return;
@@ -314,6 +317,7 @@ public sealed class MainWindow : Window
         else SetLocal(Tone.Good, "没有新变化，不用重复上传", summary);
         checkTime.Text = "上次检查 " + DateTime.Now.ToString("HH:mm:ss");
     }
+    private bool FolderHasKsdWorlds() { try { return SaveRules.KsdWorlds(settings.SaveDirectory).Count > 0; } catch (Exception) { return false; } }
     private void ShowListMessage(string message)
     {
         list.Children.Clear(); rows.Clear(); total = 0; Select(null); libraryCount.Text = "–"; pageText.Text = "";

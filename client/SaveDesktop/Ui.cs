@@ -46,6 +46,10 @@ internal static class Ui
         public const string Moon = "M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 0 1-4.4 2.26 5.4 5.4 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z";
         public const string Sun = "M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM2 13h2a1 1 0 0 0 0-2H2a1 1 0 0 0 0 2zm18 0h2a1 1 0 0 0 0-2h-2a1 1 0 0 0 0 2zM11 2v2a1 1 0 0 0 2 0V2a1 1 0 0 0-2 0zm0 18v2a1 1 0 0 0 2 0v-2a1 1 0 0 0-2 0zM5.99 4.58a1 1 0 0 0-1.41 1.41l1.06 1.06a1 1 0 0 0 1.41-1.41L5.99 4.58zm12.37 12.37a1 1 0 0 0-1.41 1.41l1.06 1.06a1 1 0 0 0 1.41-1.41l-1.06-1.06zm1.06-10.96a1 1 0 0 0-1.41-1.41l-1.06 1.06a1 1 0 0 0 1.41 1.41l1.06-1.06zM7.05 18.36a1 1 0 0 0-1.41-1.41l-1.06 1.06a1 1 0 0 0 1.41 1.41l1.06-1.06z";
     }
+    // Shown in the title bar, header and setup so players can tell which client they run.
+    public static string AppVersion { get; } = typeof(Ui).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "";
+    // Window and taskbar icon; the exe and macOS bundle icons come from Assets/app.ico and Assets/AppIcon.icns.
+    public static WindowIcon? AppIcon { get; } = typeof(Ui).Assembly.GetManifestResourceStream("icon.png") is { } png ? new WindowIcon(png) : null;
     public static readonly FontFamily Sans = new("PingFang SC, Microsoft YaHei UI, sans-serif"), Mono = new("Menlo, Consolas, monospace");
 
     // Each target dictionary gets one theme dictionary per variant, mapping resource keys to palette entries.
@@ -129,7 +133,7 @@ internal static class Ui
         var layout = new DockPanel(); DockPanel.SetDock(bar, Dock.Bottom); layout.Children.Add(bar);
         var inner = Stack(16, Text(title, 17, true), content); inner.Margin = new Thickness(24, 22, 24, 20);
         layout.Children.Add(height == null ? inner : new ScrollViewer { Content = inner, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
-        var window = new Window { Title = title, Width = width, MaxHeight = 760, MinWidth = 400, CanResize = height != null, WindowStartupLocation = WindowStartupLocation.CenterOwner, FontFamily = Sans, FontSize = 13, Content = layout, RequestedThemeVariant = owner.RequestedThemeVariant };
+        var window = new Window { Title = title, Width = width, MaxHeight = 760, MinWidth = 400, CanResize = height != null, WindowStartupLocation = WindowStartupLocation.CenterOwner, FontFamily = Sans, FontSize = 13, Content = layout, RequestedThemeVariant = owner.RequestedThemeVariant, Icon = AppIcon };
         if (height == null) window.SizeToContent = SizeToContent.Height; else { window.Height = height.Value; window.MinHeight = 420; window.MaxHeight = double.PositiveInfinity; }
         return Dyn(Dyn(window, Window.BackgroundProperty, Surface), Window.ForegroundProperty, Ink);
     }

@@ -5,7 +5,10 @@
     <AssemblyName>EnshroudedSaveManager</AssemblyName>
     <RootNamespace>Enshrouded.SaveDesktop</RootNamespace>
     <Product>雾锁存档助手</Product>
-    <Version>1.1.0</Version>
+    <AssemblyTitle>雾锁存档助手</AssemblyTitle>
+    <Description>雾锁王国共享存档工具 / Enshrouded Save Vault</Description>
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
+    <Version>1.1.1</Version>
     <PublishTrimmed>false</PublishTrimmed>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
@@ -21,5 +24,6 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
     <ProjectReference Include="../SaveCore/SaveCore.csproj" />
+    <EmbeddedResource Include="Assets/icon.png" LogicalName="icon.png" />
   </ItemGroup>
 </Project>

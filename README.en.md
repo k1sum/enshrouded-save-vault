@@ -1,6 +1,6 @@
-# Enshrouded Save Vault 1.1.0
+# Enshrouded Save Vault 1.1.1
 
-[中文](README.md) | **English** · [Release notes](docs/release-notes/v1.1.0.md) · [Changelog](CHANGELOG.md)
+[中文](README.md) | **English** · [Release notes](docs/release-notes/v1.1.1.md) · [Changelog](CHANGELOG.md)
 
 A shared-save tool for Enshrouded multiplayer worlds. It supports the game 1.0 `worldN.ksd` saves as well as the older Early Access format. You and your friends take turns restoring the same world and hosting it; the Linux server only stores backups and never runs the game.
 
@@ -16,9 +16,9 @@ From the GitHub Releases page:
 
 | File | Purpose |
 | --- | --- |
-| `EnshroudedSaveManager-1.1.0-win-x64.exe` | Windows 10/11 x64 client — double-click to run |
-| `save-server-1.1.0-linux-amd64` | Server for common x86_64 Linux hosts |
-| `save-server-1.1.0-linux-arm64` | Server for ARM64 Linux hosts |
+| `EnshroudedSaveManager-1.1.1-win-x64.exe` | Windows 10/11 x64 client — double-click to run |
+| `save-server-1.1.1-linux-amd64` | Server for common x86_64 Linux hosts |
+| `save-server-1.1.1-linux-arm64` | Server for ARM64 Linux hosts |
 | `SHA256SUMS.txt` | Checksums of the files above |
 
 Releases are built by GitHub Actions in this repository whenever a `v*` tag is pushed; the build uses no secrets or access codes. The exe is not code-signed yet, so Windows SmartScreen may warn about an "unknown publisher" on first run — choose "More info → Run anyway".
@@ -32,7 +32,7 @@ Releases are built by GitHub Actions in this repository whenever a `v*` tag is p
    - Local: `%USERPROFILE%\Saved Games\keen games\Enshrouded\default`
    - Steam Cloud: `userdata\<account>\1203620\remote` under the Steam install folder (e.g. `D:\Program Files (x86)\Steam\userdata\…\1203620\remote`)
    - Early Access saves: `%USERPROFILE%\Saved Games\enshrouded`
-5. **World file on this PC** (game 1.0 worlds): every world is one `worldN.ksd`, and N can differ between PCs. The list is sorted by modified time; pick the file that is the shared world, or "新建 worldN.ksd" (new) if this PC doesn't have it yet and you'll restore from the cloud. Nothing is preselected on first setup, so your own solo world is never mistaken for the shared one.
+5. **World file on this PC** (game 1.0 worlds): every world is one `worldN.ksd`, and N can differ between PCs. The list is sorted by modified time; pick the file that is the shared world, or "新建 worldN.ksd" (new) if this PC doesn't have it yet and you'll restore from the cloud. Nothing is preselected on first setup, so your own solo world is never mistaken for the shared one. If step 2 has an Early Access world selected while the folder holds `worldN.ksd` files, no list appears; instead a message asks the admin to create a `world.ksd` world. The window title and the bottom of Settings show the client version, so you can tell which build you run.
 6. Click "检查文件清单" (Check file list) and review what will be uploaded and restored, and what is left untouched.
 7. Tick both confirmations (file group checked, Steam Cloud handled) and click "保存并连接" (Save and connect).
 
@@ -150,9 +150,9 @@ Read-only members can browse and restore but not upload (the client shows "只�
 
 1.0.0 only understands Early Access 8-hex keys and cannot manage game 1.0 `worldN.ksd` files. Upgrade in this order:
 
-1. **Server**: back up the data directory, stop the service, replace the binary with 1.1.0, start it. Existing worlds and backups are unaffected.
+1. **Server**: back up the data directory, stop the service, replace the binary with 1.1.1, start it. Existing worlds and backups are unaffected.
 2. **Create a 1.0 world**: `vault world add --id <new-id> --library friends --name <name> --save-key world.ksd`. A world's key cannot change, so create a new world instead of reusing an old 8-hex one.
-3. **Clients**: every player switches to the 1.1.0 exe and, in Settings, picks the new world and their own `worldN.ksd`.
+3. **Clients**: every player switches to the 1.1.1 exe and, in Settings, picks the new world and their own `worldN.ksd`.
 4. **Verify on a copy first**: before the first hand-over, copy a `worldN.ksd` to another PC (a different number is fine) and confirm the game lists and loads it.
 
 ## Limits, backups and upgrades
