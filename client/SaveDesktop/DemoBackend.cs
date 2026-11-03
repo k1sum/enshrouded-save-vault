@@ -89,8 +89,8 @@ public sealed class DemoBackend(string root) : IAsyncDisposable
             File.WriteAllText(Path.Combine(path, World.SaveKey), $"DEMO DATA ONLY - NOT A GAME SAVE\n{name}\n{i++}");
             File.WriteAllText(Path.Combine(path, World.SaveKey + "_info"), JsonSerializer.Serialize(new { demo = true, world = "共同世界", revision = i }));
             File.WriteAllText(Path.Combine(path, World.SaveKey + "-1"), "DEMO backup " + i);
-            var scan = await scanner.StableScanAsync(path, World.SaveKey);
-            var local = await scanner.SnapshotAsync(path, World.SaveKey, scan, Path.Combine(Root, "seed-packages", Guid.NewGuid().ToString("N")));
+            var scan = await scanner.StableScanAsync(path, new SaveLayout(World.SaveKey));
+            var local = await scanner.SnapshotAsync(path, new SaveLayout(World.SaveKey), scan, Path.Combine(Root, "seed-packages", Guid.NewGuid().ToString("N")));
             using var api = ApiFor(user);
             var pending = new PendingUpload(Server, "demo", Guid.NewGuid().ToString("N"), new("shared", name, note, parent, local.ArchiveSha256, scan.Files), local.ArchivePath, scan.Fingerprint);
             parent = (await api.UploadAsync(pending)).Id;

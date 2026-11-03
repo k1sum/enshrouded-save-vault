@@ -34,6 +34,11 @@ internal static class SetupDialog
         var found = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var c in candidates) { var chip = Ghost(Btn(c)); chip.FontFamily = Mono; chip.FontSize = 11.5; chip.Click += (_, _) => folder.Text = c; found.Children.Add(chip); }
         var foundBlock = Stack(2, Text("找到的常见位置（点一下即可填入）：", 11.5, color: Faint), found); foundBlock.IsVisible = candidates.Count > 0;
+        // Game 1.0 worlds: every world is one worldN.ksd and N differs per PC, so each PC says which file is the shared world.
+        var slots = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, MinHeight = 38, FontSize = 12.5, FontFamily = Mono, PlaceholderText = "请选择这台电脑上对应的世界文件" };
+        List<int> slotList = [];
+        var slotNote = Text("游戏 1.0 里每个世界是一个 worldN.ksd，编号在每台电脑上可能不同。请选择与共享世界对应的那个文件；本机还没有这个世界就选“新建”，之后从云端恢复。角色（character*.ksd）、global.ksd、backup/、migrated/ 不会被上传或覆盖。", 11.5, color: Faint);
+        var slotBlock = Stack(8, Label("这台电脑上的世界文件"), slots, slotNote); slotBlock.IsVisible = false;
         var inspect = Btn("检查文件清单", Icons.Search);
         var preview = Text("", 12, color: Muted); preview.FontFamily = Mono;
         var previewBox = Box(Bg, Line); previewBox.Padding = new Thickness(14, 12); previewBox.CornerRadius = new CornerRadius(10); previewBox.Child = new ScrollViewer { Content = preview, MaxHeight = 140 }; previewBox.IsVisible = false;
@@ -42,20 +47,34 @@ internal static class SetupDialog
         var cloudNote = Text("关闭该游戏的 Steam 云同步也可能影响角色存档，请先备份。工具不会自动修改 Steam 设置。", 11.5, color: Faint); cloudNote.Margin = new Thickness(28, -6, 0, 0);
         var error = Text("", 12.5, color: Danger); error.IsVisible = false;
         var save = Primary(Btn("保存并连接")); var cancel = Btn("取消");
-        string verifiedServer = "", verifiedToken = ""; (string Folder, string World)? inspected = null;
+        string verifiedServer = "", verifiedToken = ""; (string Folder, string World, int Slot)? inspected = null;
 
         // Every handler below reports failures inside the dialog; an exception escaping a UI event would end the app.
         var content = Stack(12,
             Text("每位玩家用自己的访问码。访问码保存在这台电脑的系统凭据中，不会写进配置文件。", 12.5, color: Muted),
             Step(1, "服务器与访问码"), Label("服务器 HTTPS 地址"), server, Label("个人访问码"), token, Columns("Auto,*", verify, identity),
             Step(2, "共享世界"), worlds,
-            Step(3, "本地存档目录"), Columns("*,Auto", folder, browse), foundBlock, inspect, previewBox,
+            Step(3, "本地存档目录"), Columns("*,Auto", folder, browse), foundBlock, slotBlock, inspect, previewBox,
             Step(4, "确认"), filesOk, cloudOk, cloudNote, error);
         ((Grid)content.Children[6]).ColumnSpacing = 12; identity.VerticalAlignment = VerticalAlignment.Center;
         var window = Dialog(owner, current.Configured ? "连接设置" : "首次设置", content, Buttons(cancel, save), 580, 700);
         void Fail(string message) { error.Text = message; error.IsVisible = true; }
         void ResetFiles() { inspected = null; filesOk.IsChecked = false; previewBox.IsVisible = false; }
-        folder.TextChanged += (_, _) => ResetFiles(); worlds.SelectionChanged += (_, _) => ResetFiles();
+        WorldInfo? World() => worlds.SelectedIndex >= 0 && worlds.SelectedIndex < worldList.Count ? worldList[worlds.SelectedIndex] : null;
+        int? Slot() => slots.SelectedIndex >= 0 && slots.SelectedIndex < slotList.Count ? slotList[slots.SelectedIndex] : null;
+        void FillSlots()
+        {
+            var w = World(); var dir = folder.Text?.Trim() ?? ""; slotBlock.IsVisible = w?.SaveKey == SaveLayout.KsdKey;
+            if (!slotBlock.IsVisible) { slotList = []; slots.ItemsSource = null; return; }
+            List<KsdWorld> existing; try { existing = SaveRules.KsdWorlds(dir); } catch (Exception) { existing = []; }
+            var free = Enumerable.Range(0, SaveLayout.MaxSlot + 1).First(n => existing.All(e => e.Slot != n));
+            slotList = existing.Select(e => e.Slot).Append(free).ToList();
+            slots.ItemsSource = existing.Select(e => $"world{e.Slot}.ksd · {Size(e.Size)} · {e.Modified.LocalDateTime:MM-dd HH:mm} 修改").Append($"新建 world{free}.ksd（本机还没有这个世界）").ToList();
+            // Never guess on first setup: picking someone's own solo world by default would get it replaced on restore.
+            var same = current.World?.Id == w!.Id && current.World.SaveKey == SaveLayout.KsdKey && string.Equals(Path.GetFullPath(current.SaveDirectory.Length > 0 ? current.SaveDirectory : "."), dir.Length > 0 ? Path.GetFullPath(dir) : "", StringComparison.OrdinalIgnoreCase);
+            slots.SelectedIndex = same ? slotList.IndexOf(current.WorldSlot) : -1;
+        }
+        folder.TextChanged += (_, _) => { ResetFiles(); FillSlots(); }; worlds.SelectionChanged += (_, _) => { ResetFiles(); FillSlots(); }; slots.SelectionChanged += (_, _) => ResetFiles();
 
         verify.Click += async (_, _) =>
         {
@@ -90,9 +109,19 @@ internal static class SetupDialog
                 if (worlds.SelectedIndex < 0) throw new IOException("先验证连接并选择共享世界。");
                 var w = worldList[worlds.SelectedIndex]; var dir = folder.Text?.Trim() ?? "";
                 if (dir.Length == 0) throw new IOException("请先填写或选择本地存档目录。");
-                var scan = await new SaveScanner(services.Guard).StableScanAsync(dir, w.SaveKey, true);
-                preview.Text = $"世界文件标识 {w.SaveKey} · {scan.Files.Count} 个文件 · {Size(scan.TotalSize)}\n" + (scan.Files.Count == 0 ? "这个目录里还没有该世界，可以保存设置后先从云端恢复。" : string.Join("\n", scan.Files.Select(f => $"{f.Path}  {Size(f.Size)}")));
-                previewBox.IsVisible = true; filesOk.IsChecked = false; inspected = (dir, w.Id);
+                var layout = new SaveLayout(w.SaveKey, 0);
+                if (layout.IsKsd) layout = layout with { Slot = Slot() ?? throw new IOException("请先选择这台电脑上对应的世界文件。") };
+                var scan = await new SaveScanner(services.Guard).StableScanAsync(dir, layout, true);
+                if (layout.IsKsd)
+                {
+                    // Show what is used and, just as important, what is left alone.
+                    var others = Directory.EnumerateFileSystemEntries(dir).Select(p => Path.GetFileName(p) + (Directory.Exists(p) ? "/" : "")).Where(n => !layout.BelongsLocal(n) && !n.StartsWith(".mist-", StringComparison.Ordinal)).Order(StringComparer.OrdinalIgnoreCase).ToList();
+                    preview.Text = (scan.Files.Count == 0 ? $"本机还没有 {layout.KsdFile}：恢复时会新建这个文件。" : $"上传：本机 {layout.KsdFile}（{Size(scan.TotalSize)}）→ 云端 world.ksd\n恢复：云端 world.ksd → 本机 {layout.KsdFile}")
+                        + (others.Count > 0 ? "\n\n保持不动：\n" + string.Join("  ", others) : "")
+                        + (others.Contains("migrated/") ? "\nmigrated/ 是游戏 1.0 转换前的旧存档，工具不会使用。" : "");
+                }
+                else preview.Text = $"世界文件标识 {w.SaveKey} · {scan.Files.Count} 个文件 · {Size(scan.TotalSize)}\n" + (scan.Files.Count == 0 ? "这个目录里还没有该世界，可以保存设置后先从云端恢复。" : string.Join("\n", scan.Files.Select(f => $"{f.Path}  {Size(f.Size)}")));
+                previewBox.IsVisible = true; filesOk.IsChecked = false; inspected = (dir, w.Id, layout.Slot);
             }
             catch (Exception e) { Fail(e.Message); }
             finally { inspect.IsEnabled = true; }
@@ -106,9 +135,10 @@ internal static class SetupDialog
                 if (verifiedServer != (server.Text ?? "").Trim().TrimEnd('/') || verifiedToken != (token.Text ?? "").Trim() || worlds.SelectedIndex < 0) throw new IOException("请先验证当前填写的服务器地址和访问码，并选择共享世界。");
                 var w = worldList[worlds.SelectedIndex]; var dir = folder.Text?.Trim() ?? "";
                 if (!Directory.Exists(dir)) throw new IOException("请选择一个存在的本地存档目录。"); SaveRules.NoLinks(dir);
-                if (inspected != (dir, w.Id) || filesOk.IsChecked != true || cloudOk.IsChecked != true) throw new IOException("请点“检查文件清单”，核对后勾选“确认”里的两项。");
+                var slot = w.SaveKey == SaveLayout.KsdKey ? Slot() ?? throw new IOException("请先选择这台电脑上对应的世界文件。") : 0;
+                if (inspected != (dir, w.Id, slot) || filesOk.IsChecked != true || cloudOk.IsChecked != true) throw new IOException("请点“检查文件清单”，核对后勾选“确认”里的两项。");
                 services.SaveToken(verifiedServer, verifiedToken);
-                window.Close(new ClientSettings { Server = verifiedServer, World = w, SaveDirectory = Path.GetFullPath(dir), SteamCloudAcknowledged = true, FilesConfirmed = true });
+                window.Close(new ClientSettings { Server = verifiedServer, World = w, WorldSlot = slot, SaveDirectory = Path.GetFullPath(dir), SteamCloudAcknowledged = true, FilesConfirmed = true });
             }
             catch (Exception e) { Fail(e.Message); }
         };

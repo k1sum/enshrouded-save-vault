@@ -50,8 +50,11 @@ public sealed record ClientSettings
     public string SaveDirectory { get; init; } = "";
     public bool SteamCloudAcknowledged { get; init; }
     public bool FilesConfirmed { get; init; }
+    // Game 1.0 worlds only: which local worldN.ksd holds the shared world. Each PC picks its own.
+    public int WorldSlot { get; init; }
+    [JsonIgnore] public SaveLayout Layout => new(World?.SaveKey ?? "", WorldSlot);
     [JsonIgnore] public bool Configured => Uri.TryCreate(Server, UriKind.Absolute, out _) && World != null && Directory.Exists(SaveDirectory) && SteamCloudAcknowledged && FilesConfirmed;
-    [JsonIgnore] public string ProfileKey => Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Server.TrimEnd('/') + "|" + World?.Id + "|" + Path.GetFullPath(SaveDirectory) + "|" + World?.SaveKey)));
+    [JsonIgnore] public string ProfileKey => Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Server.TrimEnd('/') + "|" + World?.Id + "|" + Path.GetFullPath(SaveDirectory) + "|" + World?.SaveKey + (World?.SaveKey == SaveLayout.KsdKey ? "|" + WorldSlot : ""))));
 }
 public sealed record LocalScan(List<SaveFile> Files, string Fingerprint, long TotalSize, DateTimeOffset LastModified);
 public sealed record LocalCheck(LocalScan Scan, int ChangedCount, bool HasChanges, bool IsFirstBackup);

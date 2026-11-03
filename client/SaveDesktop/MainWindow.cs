@@ -305,7 +305,9 @@ public sealed class MainWindow : Window
             SetLocal(Tone.Problem, title, e.Message + " 本地进度尚未确认，暂不能上传。"); checkTime.Text = "检查失败于 " + DateTime.Now.ToString("HH:mm:ss"); Say("本地检查没有完成：" + e.Message, true); return;
         }
         var pending = state.GetPending(settings);
-        var summary = $"{settings.World!.Name} · {check.Scan.Files.Count} 个文件 · {Size(check.Scan.TotalSize)} · {check.ChangedCount} 项变化";
+        var summary = settings.Layout.IsKsd
+            ? $"{settings.World!.Name} · {settings.Layout.KsdFile} · {Size(check.Scan.TotalSize)}"
+            : $"{settings.World!.Name} · {check.Scan.Files.Count} 个文件 · {Size(check.Scan.TotalSize)} · {check.ChangedCount} 项变化";
         if (pending != null) SetLocal(Tone.Attention, "上次上传未完成，可以重试", $"「{pending.Metadata.Name}」已打包保留 · " + summary);
         else if (check.IsFirstBackup) SetLocal(Tone.Attention, "本地存档尚未备份，可以上传", summary);
         else if (check.HasChanges) SetLocal(Tone.Attention, "发现新进度，可以上传", summary);
@@ -371,7 +373,7 @@ public sealed class MainWindow : Window
             var draft = await UploadPrompt(inspected); if (draft == null) { Say("已取消上传，没有生成任何文件。"); return; }
             // Package only what the user just confirmed; the snapshot re-verifies every file against that scan.
             guard.EnsureStopped(); Say("正在生成完整的本地备份…"); var outbox = state.NewFolder("outbox"); LocalSnapshot package;
-            try { package = await scanner.SnapshotAsync(settings.SaveDirectory, world.SaveKey, inspected.Scan, outbox); }
+            try { package = await scanner.SnapshotAsync(settings.SaveDirectory, settings.Layout, inspected.Scan, outbox); }
             catch (IOException)
             {
                 try { Directory.Delete(outbox, true); } catch (IOException) { }
@@ -389,7 +391,7 @@ public sealed class MainWindow : Window
     {
         var selected = Selected; if (selected == null || api == null) return; guard.EnsureStopped();
         var warning = check?.HasChanges == true || state.GetPending(settings) != null ? "\n\n注意：本地有尚未上传的新进度，恢复后会被替换（旧档仍会保留在“本地备份”里）。" : "";
-        if (!await Ask(this, "使用这份存档？", $"{selected.Name}\n{selected.Uploader} 上传 · {selected.CreatedAt.LocalDateTime:g}\n\n会下载并恢复到：\n{settings.SaveDirectory}\n\n当前本地世界会先自动备份。{warning}", "下载并恢复")) return;
+        if (!await Ask(this, "使用这份存档？", $"{selected.Name}\n{selected.Uploader} 上传 · {selected.CreatedAt.LocalDateTime:g}\n\n会下载并恢复到：\n{(settings.Layout.IsKsd ? Path.Combine(settings.SaveDirectory, settings.Layout.KsdFile) : settings.SaveDirectory)}\n\n当前本地世界会先自动备份。{warning}", "下载并恢复")) return;
         Say("正在下载并校验备份…");
         var file = await api.DownloadAsync(selected, state.NewFolder("downloads"), Meter("下载中", selected.ArchiveSize));
         progress.IsIndeterminate = true; Say("正在备份旧档并恢复，请不要启动游戏…");
@@ -406,8 +408,9 @@ public sealed class MainWindow : Window
         var facts = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 16, RowSpacing = 8 };
         void Fact(string label, Control value) { var row = facts.RowDefinitions.Count; facts.RowDefinitions.Add(new RowDefinition(GridLength.Auto)); var l = Text(label, 12, color: Faint); Grid.SetRow(l, row); Grid.SetRow(value, row); Grid.SetColumn(value, 1); facts.Children.Add(l); facts.Children.Add(value); }
         Fact("世界", Text(settings.World!.Name, 13, true));
-        Fact("本地路径", Dyn(new SelectableTextBlock { Text = settings.SaveDirectory, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = Mono }, SelectableTextBlock.ForegroundProperty, Muted));
-        Fact("上传内容", Text($"{inspected.Scan.Files.Count} 个文件 · {Size(inspected.Scan.TotalSize)}（打包前）", 13, true));
+        var layout = settings.Layout;
+        Fact("本地路径", Dyn(new SelectableTextBlock { Text = layout.IsKsd ? Path.Combine(settings.SaveDirectory, layout.KsdFile) : settings.SaveDirectory, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = Mono }, SelectableTextBlock.ForegroundProperty, Muted));
+        Fact("上传内容", Text(layout.IsKsd ? $"{layout.KsdFile} → 云端 world.ksd · {Size(inspected.Scan.TotalSize)}（打包前）" : $"{inspected.Scan.Files.Count} 个文件 · {Size(inspected.Scan.TotalSize)}（打包前）", 13, true));
         Fact("变化", Text($"{inspected.ChangedCount} 个文件有变化（含新增、修改、删除）· 最近保存 {inspected.Scan.LastModified.LocalDateTime:MM-dd HH:mm}", 12, color: Muted));
         var previous = state.GetBaseline(settings)?.Files.ToDictionary(f => f.Path, f => f.Sha256) ?? [];
         var fileRows = new Grid { ColumnDefinitions = new ColumnDefinitions("12,*,Auto"), ColumnSpacing = 8, RowSpacing = 6, Margin = new Thickness(0, 4, 12, 0) };
@@ -417,7 +420,7 @@ public sealed class MainWindow : Window
             fileRows.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             var changed = !previous.TryGetValue(f.Path, out var sha) || sha != f.Sha256;
             var dot = Dyn(new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center }, Avalonia.Controls.Shapes.Shape.FillProperty, changed ? Ember : Line); ToolTip.SetTip(dot, changed ? "有变化" : "未变化");
-            var path = Text(f.Path, 12, color: changed ? Ink : Muted); path.FontFamily = Mono;
+            var path = Text(layout.ToLocal(f.Path), 12, color: changed ? Ink : Muted); path.FontFamily = Mono;
             var size = Text(Size(f.Size), 12, color: Faint);
             foreach (var (c, col) in new Control[] { dot, path, size }.Select((c, col) => (c, col))) { Grid.SetRow(c, i); Grid.SetColumn(c, col); fileRows.Children.Add(c); }
         }

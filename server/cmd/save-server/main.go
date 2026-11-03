@@ -56,7 +56,7 @@ func run() error {
 	opts.StringVar(&a.Name, "name", "", "display name")
 	opts.StringVar(&a.UserID, "user", "", "user ID")
 	opts.StringVar(&a.LibraryID, "library", "", "library ID")
-	opts.StringVar(&a.SaveKey, "save-key", "", "world file's 8-character lowercase hex prefix")
+	opts.StringVar(&a.SaveKey, "save-key", "", "world.ksd for game 1.0 worlds, or the Early Access 8-character lowercase hex prefix")
 	opts.StringVar(&a.Device, "device", "", "device label")
 	opts.IntVar(&a.Days, "days", 180, "credential lifetime")
 	opts.BoolVar(&a.Write, "write", true, "allow uploads")

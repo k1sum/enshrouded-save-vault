@@ -2,6 +2,14 @@
 
 每个版本的完整中英文说明见 [docs/release-notes](docs/release-notes)。Full bilingual notes for each version are in [docs/release-notes](docs/release-notes).
 
+## 1.1.0
+
+- 支持游戏 1.0 的 `worldN.ksd` 存档：服务器世界标识 `world.ksd`，每台电脑选择自己的世界编号，云端统一保存为 `world.ksd`，跨编号恢复。
+- 只上传和覆盖所选世界文件；角色、`global.ksd`、其他世界、游戏的 `backup/` 和 `migrated/` 不受影响。服务端同样只接受 `world.ksd`。
+- 首次设置新增世界文件选择（不自动选择），文件清单列出保持不动的文件；新增游戏 1.0 本地存档目录和注册表中的 Steam 位置。
+- 恢复日志记录世界编号，恢复中断后能回到正确的文件；兼容 1.0.0 留下的日志。
+- 抢先体验版 8 位标识世界保持不变。
+
 ## 1.0.0
 
 - Windows 客户端改用 Avalonia，与 macOS 演示共用同一套界面；发布为单个自包含 EXE，双击即用，无需安装 .NET 或其他依赖。旧的 WinForms 客户端已移除，设置、凭据和本地备份目录沿用，升级后无需重新设置。

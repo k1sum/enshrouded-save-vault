@@ -22,14 +22,39 @@ public sealed class GameGuard : IGameGuard
     public void EnsureStopped() { if (IsRunning()) throw new IOException("游戏仍在运行，请完全退出游戏后再检查、上传或恢复。"); }
 }
 
+// Maps cloud file names to this PC. Manifests, baselines, archives and journals always use cloud names;
+// only reads and writes inside the save folder use local names.
+// Early Access worlds: an 8-hex prefix, identical everywhere, so names map one to one.
+// Game 1.0 worlds: one worldN.ksd file whose slot N differs between PCs; the cloud name is always world.ksd.
+public sealed record SaveLayout(string Key, int Slot = 0)
+{
+    public const string KsdKey = "world.ksd";
+    public const int MaxSlot = 99;
+    public bool IsKsd => Key == KsdKey;
+    public string KsdFile => $"world{Slot}.ksd";
+    public void Validate()
+    {
+        if (!SaveRules.ValidKey(Key)) throw new IOException("世界文件标识无效：应为 world.ksd（游戏 1.0）或 8 位小写十六进制（抢先体验版）。");
+        if (IsKsd && (Slot < 0 || Slot > MaxSlot)) throw new IOException("世界槽位无效。");
+    }
+    // Windows names are case-insensitive; the game writes lowercase, but accept either.
+    public bool BelongsLocal(string name) => IsKsd ? string.Equals(name, KsdFile, StringComparison.OrdinalIgnoreCase) : SaveRules.Belongs(name, Key);
+    public string ToCloud(string local) => IsKsd ? KsdKey : local;
+    public string ToLocal(string cloud) => !IsKsd ? cloud : cloud == KsdKey ? KsdFile : throw new IOException("不安全的世界文件：" + cloud);
+    public string LocalPath(string directory, string cloud) => Path.Combine(directory, ToLocal(cloud));
+    public string Describe => IsKsd ? KsdFile : $"世界文件标识 {Key}";
+}
+public sealed record KsdWorld(int Slot, long Size, DateTimeOffset Modified);
+
 public static class SaveRules
 {
     public const int MaxFiles = 128;
     public const long MaxExpanded = 2L << 30;
     public const long MaxArchive = 512L << 20;
-    public static bool ValidKey(string key) => Regex.IsMatch(key, "^[0-9a-f]{8}$");
+    public static bool ValidKey(string key) => key == SaveLayout.KsdKey || Regex.IsMatch(key, "^[0-9a-f]{8}$");
     public static bool ValidName(string name, string key)
     {
+        if (key == SaveLayout.KsdKey) return name == SaveLayout.KsdKey;
         if (!ValidKey(key) || name.Length > 128 || name.Trim() != name || name.EndsWith('.')) return false;
         if (name == key) return true;
         if (!name.StartsWith(key, StringComparison.Ordinal) || name.Length <= key.Length + 1) return false;
@@ -60,11 +85,31 @@ public static class SaveRules
     }
     public static string HashFile(string path)
     { NoLinks(path); using var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read); return Convert.ToHexStringLower(SHA256.HashData(f)); }
+    // Game 1.0 world files in a folder, newest first. Used to pick this PC's slot for the shared world.
+    public static List<KsdWorld> KsdWorlds(string directory)
+    {
+        if (!Directory.Exists(directory)) return [];
+        var found = new List<KsdWorld>();
+        foreach (var path in Directory.EnumerateFiles(directory))
+        {
+            var m = Regex.Match(Path.GetFileName(path), @"^world(\d{1,2})\.ksd$", RegexOptions.IgnoreCase);
+            if (!m.Success) continue; var fi = new FileInfo(path);
+            if ((fi.Attributes & FileAttributes.ReparsePoint) == 0) found.Add(new(int.Parse(m.Groups[1].Value), fi.Length, fi.LastWriteTimeUtc));
+        }
+        return found.OrderByDescending(w => w.Modified).ToList();
+    }
     public static List<string> Candidates()
     {
-        var candidates = new List<string> { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Saved Games", "enshrouded") };
-        var steamRoots = new[] { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam"), @"C:\Program Files (x86)\Steam", @"D:\Steam" };
-        foreach (var steam in steamRoots.Distinct())
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        // Game 1.0 local saves, then the Early Access folder, then Steam Cloud folders of every Steam account.
+        var candidates = new List<string> { Path.Combine(profile, "Saved Games", "keen games", "Enshrouded", "default"), Path.Combine(profile, "Saved Games", "enshrouded") };
+        var steamRoots = new List<string> { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam"), @"C:\Program Files (x86)\Steam", @"D:\Program Files (x86)\Steam", @"D:\Steam" };
+        if (OperatingSystem.IsWindows())
+        {
+            try { if (Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) is string steamPath && steamPath.Length > 0) steamRoots.Insert(0, Path.GetFullPath(steamPath)); }
+            catch (Exception e) when (e is System.Security.SecurityException or IOException or UnauthorizedAccessException) { }
+        }
+        foreach (var steam in steamRoots.Distinct(StringComparer.OrdinalIgnoreCase))
         { var users = Path.Combine(steam, "userdata"); if (!Directory.Exists(users)) continue; try { foreach (var u in Directory.EnumerateDirectories(users)) candidates.Add(Path.Combine(u, "1203620", "remote")); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
         return candidates.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
@@ -73,40 +118,43 @@ public static class SaveRules
 public sealed class SaveScanner(IGameGuard guard, TimeSpan? stabilityDelay = null)
 {
     private readonly TimeSpan delay = stabilityDelay ?? TimeSpan.FromMilliseconds(750);
-    public LocalScan Scan(string directory, string key, bool allowEmpty = false)
+    // Returned file names are cloud names (see SaveLayout).
+    public LocalScan Scan(string directory, SaveLayout layout, bool allowEmpty = false)
     {
         guard.EnsureStopped(); SaveRules.NoLinks(directory);
         if (!Directory.Exists(directory)) throw new DirectoryNotFoundException("找不到存档目录，请检查设置。");
-        if (!SaveRules.ValidKey(key)) throw new IOException("世界文件标识必须是 8 位小写十六进制字符。");
+        layout.Validate(); var key = layout.Key;
         var files = new List<SaveFile>(); long total = 0; var modified = DateTimeOffset.MinValue;
         foreach (var path in Directory.EnumerateFileSystemEntries(directory).Order(StringComparer.Ordinal))
         {
-            var name = Path.GetFileName(path); if (!SaveRules.Belongs(name, key)) continue;
-            SaveRules.NoLinks(path); if (!SaveRules.ValidName(name, key) || Directory.Exists(path)) throw new IOException("世界文件组中存在不支持的项目：" + name);
+            var local = Path.GetFileName(path); if (!layout.BelongsLocal(local)) continue;
+            var name = layout.ToCloud(local);
+            SaveRules.NoLinks(path); if (!SaveRules.ValidName(name, key) || Directory.Exists(path)) throw new IOException("世界文件组中存在不支持的项目：" + local);
             var fi = new FileInfo(path); if (fi.Length > SaveRules.MaxExpanded || files.Count >= SaveRules.MaxFiles) throw new IOException("世界文件数量或大小超过限制。");
             var hash = SaveRules.HashFile(path); fi.Refresh(); total = checked(total + fi.Length); if (total > SaveRules.MaxExpanded) throw new IOException("存档过大。");
             files.Add(new(name, fi.Length, hash)); if (fi.LastWriteTimeUtc > modified) modified = fi.LastWriteTimeUtc;
         }
-        if (files.Count == 0 && !allowEmpty) throw new IOException("没有找到这个世界的文件。请核对目录和世界标识；新房主可先从云端恢复。");
+        if (files.Count == 0 && !allowEmpty) throw new IOException($"没有找到这个世界的文件（{layout.Describe}）。请核对目录和世界设置；新房主可先从云端恢复。");
         SaveRules.ValidateManifest(files, key, allowEmpty);
         return new(files, SaveRules.Fingerprint(files), total, modified);
     }
-    public async Task<LocalScan> StableScanAsync(string directory, string key, bool allowEmpty = false, CancellationToken ct = default)
+    public async Task<LocalScan> StableScanAsync(string directory, SaveLayout layout, bool allowEmpty = false, CancellationToken ct = default)
     {
-        var first = await Task.Run(() => Scan(directory, key, allowEmpty), ct); await Task.Delay(delay, ct);
-        var second = await Task.Run(() => Scan(directory, key, allowEmpty), ct);
+        var first = await Task.Run(() => Scan(directory, layout, allowEmpty), ct); await Task.Delay(delay, ct);
+        var second = await Task.Run(() => Scan(directory, layout, allowEmpty), ct);
         if (first.Fingerprint != second.Fingerprint) throw new IOException("存档仍在保存，请稍后重新检查。");
         return second;
     }
     public async Task<LocalCheck> CheckAsync(ClientSettings c, ClientState state, CancellationToken ct = default)
     {
         if (File.Exists(state.JournalPath)) throw new IOException("有未完成的恢复，请先恢复本地旧档。");
-        var scan = await StableScanAsync(c.SaveDirectory, c.World!.SaveKey, false, ct); var baseline = state.GetBaseline(c);
+        var scan = await StableScanAsync(c.SaveDirectory, c.Layout, false, ct); var baseline = state.GetBaseline(c);
         var before = baseline?.Files.ToDictionary(f => f.Path, StringComparer.Ordinal) ?? [];
         int changes = scan.Files.Count(f => !before.TryGetValue(f.Path, out var old) || old.Sha256 != f.Sha256 || old.Size != f.Size) + before.Keys.Count(n => !scan.Files.Any(f => f.Path == n));
         return new(scan, changes, baseline?.Fingerprint != scan.Fingerprint, baseline == null);
     }
-    public async Task<LocalSnapshot> SnapshotAsync(string directory, string key, LocalScan expected, string destination, CancellationToken ct = default)
+    // Archive entries carry cloud names; the bytes come from this PC's local files.
+    public async Task<LocalSnapshot> SnapshotAsync(string directory, SaveLayout layout, LocalScan expected, string destination, CancellationToken ct = default)
     {
         guard.EnsureStopped(); Directory.CreateDirectory(destination); var archive = Path.Combine(destination, "world.zip");
         try
@@ -116,7 +164,7 @@ public sealed class SaveScanner(IGameGuard guard, TimeSpan? stabilityDelay = nul
                 using (var zip = new ZipArchive(file, ZipArchiveMode.Create, true))
                 foreach (var f in expected.Files)
                 {
-                    ct.ThrowIfCancellationRequested(); guard.EnsureStopped(); var source = Path.Combine(directory, f.Path); SaveRules.NoLinks(source);
+                    ct.ThrowIfCancellationRequested(); guard.EnsureStopped(); var source = layout.LocalPath(directory, f.Path); SaveRules.NoLinks(source);
                     using var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read);
                     if (input.Length != f.Size) throw new IOException("存档已变化，请重新检查。");
                     var entry = zip.CreateEntry(f.Path, CompressionLevel.Optimal); using var output = entry.Open();
@@ -127,7 +175,7 @@ public sealed class SaveScanner(IGameGuard guard, TimeSpan? stabilityDelay = nul
                 file.Flush(true);
             }, ct);
             if (new FileInfo(archive).Length > SaveRules.MaxArchive) throw new IOException("压缩后存档超过 512 MB 限制。");
-            var after = await StableScanAsync(directory, key, expected.Files.Count == 0, ct);
+            var after = await StableScanAsync(directory, layout, expected.Files.Count == 0, ct);
             if (after.Fingerprint != expected.Fingerprint) throw new IOException("打包期间存档发生变化，请重新检查。");
             return new(archive, SaveRules.HashFile(archive), expected);
         }

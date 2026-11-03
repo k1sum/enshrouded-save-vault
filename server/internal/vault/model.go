@@ -99,6 +99,13 @@ func randomID(n int) (string, error) {
 
 var idRE = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 var keyRE = regexp.MustCompile(`^[0-9a-f]{8}$`)
+
+// KsdKey marks a world saved in the game's 1.0 format: one worldN.ksd file per world.
+// The slot number N differs between PCs, so the archive always carries the slot-free name.
+const KsdKey = "world.ksd"
+
+// ValidSaveKey accepts an Early Access 8-hex world prefix or the 1.0 single-file world.
+func ValidSaveKey(key string) bool { return keyRE.MatchString(key) || key == KsdKey }
 var hashRE = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var suffixRE = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
 
@@ -112,6 +119,9 @@ func canWrite(s State, user, lib string) bool {
 
 // Flat files belonging to exactly one chosen world; never accept arbitrary paths.
 func ValidSaveName(name, key string) bool {
+	if key == KsdKey {
+		return name == KsdKey
+	}
 	if !keyRE.MatchString(key) || len(name) > 128 || strings.TrimSpace(name) != name || strings.HasSuffix(name, ".") {
 		return false
 	}

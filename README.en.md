@@ -1,8 +1,8 @@
-# Enshrouded Save Vault 1.0.0
+# Enshrouded Save Vault 1.1.0
 
-[中文](README.md) | **English** · [Release notes](docs/release-notes/v1.0.0.md) · [Changelog](CHANGELOG.md)
+[中文](README.md) | **English** · [Release notes](docs/release-notes/v1.1.0.md) · [Changelog](CHANGELOG.md)
 
-A shared-save tool for Enshrouded multiplayer worlds. You and your friends take turns restoring the same world and hosting it; the Linux server only stores backups and never runs the game.
+A shared-save tool for Enshrouded multiplayer worlds. It supports the game 1.0 `worldN.ksd` saves as well as the older Early Access format. You and your friends take turns restoring the same world and hosting it; the Linux server only stores backups and never runs the game.
 
 - **Windows client**: a single `.exe` with the .NET runtime and UI libraries built in. **Download and double-click — nothing to install**, no administrator rights needed.
 - **Linux server**: a single Go binary, served over HTTPS by Caddy.
@@ -16,9 +16,9 @@ From the GitHub Releases page:
 
 | File | Purpose |
 | --- | --- |
-| `EnshroudedSaveManager-1.0.0-win-x64.exe` | Windows 10/11 x64 client — double-click to run |
-| `save-server-1.0.0-linux-amd64` | Server for common x86_64 Linux hosts |
-| `save-server-1.0.0-linux-arm64` | Server for ARM64 Linux hosts |
+| `EnshroudedSaveManager-1.1.0-win-x64.exe` | Windows 10/11 x64 client — double-click to run |
+| `save-server-1.1.0-linux-amd64` | Server for common x86_64 Linux hosts |
+| `save-server-1.1.0-linux-arm64` | Server for ARM64 Linux hosts |
 | `SHA256SUMS.txt` | Checksums of the files above |
 
 Releases are built by GitHub Actions in this repository whenever a `v*` tag is pushed; the build uses no secrets or access codes. The exe is not code-signed yet, so Windows SmartScreen may warn about an "unknown publisher" on first run — choose "More info → Run anyway".
@@ -28,17 +28,24 @@ Releases are built by GitHub Actions in this repository whenever a `v*` tag is p
 1. Double-click the exe; the first-run setup opens automatically.
 2. **Server and access code**: enter `https://your-domain` and the personal access code your admin sent you privately, then click "验证连接" (Verify). Make sure it shows your own name.
 3. **Shared world**: pick the world you play together.
-4. **Local save folder**: click one of the detected locations, or "选择…" (Browse) to pick one:
-   - `%USERPROFILE%\Saved Games\enshrouded`
-   - Steam's `userdata\<account>\1203620\remote`
-5. Click "检查文件清单" (Check file list) and confirm the world file key, file names and sizes. A new host without the world locally can still save the settings and restore from the cloud first.
-6. Tick both confirmations (file group checked, Steam Cloud handled) and click "保存并连接" (Save and connect).
+4. **Local save folder**: click one of the detected locations, or "选择…" (Browse). Game 1.0 keeps saves in two places, shown in the in-game world list as "Local" and "Steam Cloud":
+   - Local: `%USERPROFILE%\Saved Games\keen games\Enshrouded\default`
+   - Steam Cloud: `userdata\<account>\1203620\remote` under the Steam install folder (e.g. `D:\Program Files (x86)\Steam\userdata\…\1203620\remote`)
+   - Early Access saves: `%USERPROFILE%\Saved Games\enshrouded`
+5. **World file on this PC** (game 1.0 worlds): every world is one `worldN.ksd`, and N can differ between PCs. The list is sorted by modified time; pick the file that is the shared world, or "新建 worldN.ksd" (new) if this PC doesn't have it yet and you'll restore from the cloud. Nothing is preselected on first setup, so your own solo world is never mistaken for the shared one.
+6. Click "检查文件清单" (Check file list) and review what will be uploaded and restored, and what is left untouched.
+7. Tick both confirmations (file group checked, Steam Cloud handled) and click "保存并连接" (Save and connect).
 
 The access code is stored in Windows Credential Manager, never in the settings file. Use "设置" (Settings) in the bottom-left corner to change it later.
 
 **Steam Cloud**: make sure it doesn't overwrite the same files as this tool. Turning off Cloud for the game may also affect character sync, so back up characters and existing worlds first. The tool never changes Steam settings.
 
-**What counts as the world**: the 8-hex-digit world file key configured on the server identifies the main file plus flat files starting with `key_`, `key-` or `key.`. The tool cannot prove a match from the in-game world name and does not parse the game's binary format. The local slot with that key is replaced by the chosen backup, so check it manually the first time and never use another world's key for the shared world. Other worlds and character files (such as `characters`) are never included; symlinks and junctions in the path are rejected.
+**What counts as the world**:
+
+- **Game 1.0 worlds** (world key `world.ksd` on the server): only the one `worldN.ksd` you picked. The cloud always stores it as `world.ksd`; uploads read it from this PC's slot and restores write it back to this PC's slot, so different slot numbers on different PCs are fine. `character*.ksd`, `global.ksd`, `user_settings.json`, other `worldN.ksd` files and the game's own `backup/` and `migrated/` folders are never uploaded or overwritten.
+- **Early Access worlds** (8 lowercase hex digits): the main file plus flat files starting with `key_`, `key-` or `key.`, exactly as in 1.0.0.
+- The tool does not parse the game's binary format and cannot prove a match from the in-game world name, so check manually the first time. The chosen slot is replaced by the restored save (after an automatic backup). Symlinks and junctions in the path are rejected.
+- `migrated/` holds the pre-1.0 saves the game converted and no longer reads; never treat them as the latest progress.
 
 ## Day-to-day use
 
@@ -111,8 +118,9 @@ vault user add --id user_a --name A
 vault user add --id user_b --name B
 vault library add --id friends --name 共同存档库
 
-# 3ad85aea is only an example: use the 8-digit lowercase hex key of your world's main file.
-vault world add --id shared --library friends --name 共同世界 --save-key 3ad85aea
+# Game 1.0 world: the key is always world.ksd (each PC picks its own worldN.ksd in the client).
+vault world add --id shared --library friends --name 共同世界 --save-key world.ksd
+# Only Early Access saves use an 8-digit lowercase hex key, e.g. --save-key 3ad85aea
 
 vault member grant --user me --library friends
 vault member grant --user user_a --library friends
@@ -137,6 +145,15 @@ vault member grant --user user_b --library friends --write=false
 ```
 
 Read-only members can browse and restore but not upload (the client shows "只读", read-only). A credential's `last_used_since_start` is the last use since the service started and resets on restart; see `journalctl -u enshrouded-save` for the full audit log. Access codes are never logged. The client warns when a code expires within 7 days.
+
+## Upgrading from 1.0.0 (game 1.0 saves)
+
+1.0.0 only understands Early Access 8-hex keys and cannot manage game 1.0 `worldN.ksd` files. Upgrade in this order:
+
+1. **Server**: back up the data directory, stop the service, replace the binary with 1.1.0, start it. Existing worlds and backups are unaffected.
+2. **Create a 1.0 world**: `vault world add --id <new-id> --library friends --name <name> --save-key world.ksd`. A world's key cannot change, so create a new world instead of reusing an old 8-hex one.
+3. **Clients**: every player switches to the 1.1.0 exe and, in Settings, picks the new world and their own `worldN.ksd`.
+4. **Verify on a copy first**: before the first hand-over, copy a `worldN.ksd` to another PC (a different number is fine) and confirm the game lists and loads it.
 
 ## Limits, backups and upgrades
 
@@ -181,6 +198,7 @@ On Windows you can also run `scripts/build-client.ps1`. For the cross-stack chec
 
 - Go: authentication, revocation/expiry/disabling, cross-library isolation, forged uploaders, idempotency, search and paging, quotas, corrupt archives, link/path rejection, restarts and the single-writer lock.
 - C# core: change detection, selected-world isolation, snapshot verification, rollback of partial restores, recovery after restart, rejection of malicious paths and links, pending uploads and the HTTP credential policy; against the real Go server: identity, Chinese-note upload/search, idempotent retry, download, local restore and token revocation.
+- Game 1.0 saves: the server accepts only the single `world.ksd` file and rejects `world0.ksd`, `character0.ksd`, `global.ksd`, game backups and the like; the client uploads from slot 0 and restores into slots 2/3/5 on another PC (including a new slot), rolls back partial writes and interrupted restores after a restart, and leaves other worlds, characters, `global.ksd`, `backup/` and `migrated/` untouched; the same upload, download and cross-slot restore pass between the real Go server and the C# client.
 - Desktop client: on macOS against the real Go server, the full real-mode flow — first-run setup → connect → list → locked while the game runs → automatic check after it exits; the access code is never written to the settings file. Demo mode: upload, identity switching, restore, selection across pages, check-failure messages and light/dark switching.
 
-**Still to verify on real Windows**: window and high-DPI display, Windows Credential Manager, game process detection, real world-file layout, Steam Cloud conflicts, and two PCs taking turns. macOS tests are not presented as Windows or in-game testing. Run the hand-over between two Windows PCs on a copy of your world first, before using your only real progress.
+**Still to verify on real Windows**: window and high-DPI display, Windows Credential Manager, game process detection, Steam Cloud conflicts, and two PCs taking turns. For game 1.0 also confirm that copying only `worldN.ksd` (without `global.ksd`) under a different number still shows up in the in-game world list and loads; this follows server hosts' migration guides, as Keen has not published the file format. macOS tests are not presented as Windows or in-game testing. Run the hand-over between two Windows PCs on a copy of your world first, before using your only real progress.

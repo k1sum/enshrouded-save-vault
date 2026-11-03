@@ -423,8 +423,8 @@ func (s *Store) Admin(a AdminRequest) (any, error) {
 			}
 			st.Libraries[a.ID] = Library{a.ID, a.Name}
 		case "world.add":
-			if !validID(a.ID) || !keyRE.MatchString(a.SaveKey) || strings.TrimSpace(a.Name) == "" {
-				return errors.New("world requires id, name, and 8 lowercase hex save-key")
+			if !validID(a.ID) || !ValidSaveKey(a.SaveKey) || strings.TrimSpace(a.Name) == "" {
+				return errors.New("world requires id, name, and a save-key: world.ksd (game 1.0) or an 8 lowercase hex prefix (Early Access)")
 			}
 			if _, ok := st.Libraries[a.LibraryID]; !ok {
 				return errors.New("library not found")

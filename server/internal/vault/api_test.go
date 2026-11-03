@@ -300,3 +300,31 @@ func TestExpiredCredentialAndPerUserQuota(t *testing.T) {
 		t.Fatal("per-user quota not enforced")
 	}
 }
+func TestGame10SingleFileWorld(t *testing.T) {
+	f := setup(t)
+	if _, e := f.s.Admin(AdminRequest{Action: "world.add", ID: "ksd", Name: "1.0", LibraryID: "friends", SaveKey: KsdKey}); e != nil {
+		t.Fatal(e)
+	}
+	// A slot-numbered name is a local detail, never a world identity.
+	for _, key := range []string{"world0.ksd", "world.KSD", "world", "../world.ksd", "3AD85AEA"} {
+		if _, e := f.s.Admin(AdminRequest{Action: "world.add", ID: "bad", Name: "bad", LibraryID: "friends", SaveKey: key}); e == nil {
+			t.Fatal("accepted save key", key)
+		}
+	}
+	// Only the slot-free world file may be uploaded; characters, global data and the game's own backups never.
+	for _, path := range []string{"world0.ksd", "character0.ksd", "global.ksd", "user_settings.json", "world.ksd.backup-0", "backup/world.ksd", "3ad85aea"} {
+		m, z := archive(t, "ksd", path, "bad", "")
+		if w := upload(t, f, f.a, "ksd-bad-"+path, m, z); w.Code != 400 {
+			t.Fatal(path, w.Code, w.Body.String())
+		}
+	}
+	m, z := archive(t, "ksd", KsdKey, "1.0 world", "")
+	if w := upload(t, f, f.a, "ksd-ok", m, z); w.Code != 201 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var page struct{ Items []Backup }
+	_ = json.NewDecoder(call(f.api, "GET", "/v1/backups?world=ksd", f.b, nil, "", "").Body).Decode(&page)
+	if len(page.Items) != 1 || page.Items[0].SaveKey != KsdKey || page.Items[0].Files[0].Path != KsdKey {
+		t.Fatalf("unexpected listing: %+v", page.Items)
+	}
+}

@@ -41,6 +41,7 @@ with tempfile.TemporaryDirectory(prefix="server-smoke-", dir=root / ".build") as
             admin("user", "add", "--id", "a", "--name", "A")
             admin("library", "add", "--id", "friends", "--name", "Friends")
             admin("world", "add", "--id", "shared", "--name", "Shared", "--library", "friends", "--save-key", "3ad85aea")
+            admin("world", "add", "--id", "ksd", "--name", "Game 1.0", "--library", "friends", "--save-key", "world.ksd")
             admin("member", "grant", "--user", "a", "--library", "friends")
             credential = admin("token", "issue", "--user", "a", "--device", "fixture", "--days", "1")
             env = os.environ.copy()

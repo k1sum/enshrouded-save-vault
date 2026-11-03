@@ -1,8 +1,8 @@
-# 雾锁存档助手 1.0.0
+# 雾锁存档助手 1.1.0
 
-**中文** | [English](README.en.md) · [版本说明](docs/release-notes/v1.0.0.md) · [更新记录](CHANGELOG.md)
+**中文** | [English](README.en.md) · [版本说明](docs/release-notes/v1.1.0.md) · [更新记录](CHANGELOG.md)
 
-雾锁王国（Enshrouded）多人世界的共享存档工具。你、A、B 轮流恢复同一个世界并当房主；Linux 服务器只保存备份，不运行游戏。
+雾锁王国（Enshrouded）多人世界的共享存档工具，支持游戏 1.0 的 `worldN.ksd` 存档，也兼容抢先体验版的旧格式。你、A、B 轮流恢复同一个世界并当房主；Linux 服务器只保存备份，不运行游戏。
 
 - **Windows 客户端**：一个 `.exe`，自带 .NET 运行时和界面库，**下载后双击即用，无需安装任何依赖**，也不需要管理员权限。
 - **Linux 服务端**：Go 单文件服务，配合 Caddy 提供 HTTPS。
@@ -16,28 +16,35 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| `EnshroudedSaveManager-1.0.0-win-x64.exe` | Windows 10/11 x64 客户端，双击运行 |
-| `save-server-1.0.0-linux-amd64` | 常见 x86_64 Linux 服务器 |
-| `save-server-1.0.0-linux-arm64` | ARM64 Linux 服务器 |
+| `EnshroudedSaveManager-1.1.0-win-x64.exe` | Windows 10/11 x64 客户端，双击运行 |
+| `save-server-1.1.0-linux-amd64` | 常见 x86_64 Linux 服务器 |
+| `save-server-1.1.0-linux-arm64` | ARM64 Linux 服务器 |
 
 Releases 由仓库里的 GitHub Actions 在推送 `v*` 标签时自动构建，构建过程不含任何密钥或访问码。EXE 目前没有代码签名，第一次运行时 Windows SmartScreen 可能提示“未知发布者”，选择“更多信息 → 仍要运行”。
 
 ## Windows：首次设置
 
-1. 双击 `EnshroudedSaveManager-1.0.0-win-x64.exe`，自动打开“首次设置”。
+1. 双击 `EnshroudedSaveManager-1.1.0-win-x64.exe`，自动打开“首次设置”。
 2. **服务器与访问码**：填写 `https://你的域名` 和管理员单独发给你的个人访问码，点“验证连接”，确认显示的是你自己的名字。
 3. **共享世界**：选择要一起玩的世界。
-4. **本地存档目录**：点下方找到的常见位置，或点“选择…”手动指定：
-   - `%USERPROFILE%\Saved Games\enshrouded`
-   - Steam 的 `userdata\<账号目录>\1203620\remote`
-5. 点“检查文件清单”，核对世界文件标识、文件名和大小。新房主本地还没有这个世界也可以保存，之后先从云端恢复。
-6. 勾选两项确认（文件组已核对、Steam Cloud 已处理），点“保存并连接”。
+4. **本地存档目录**：点下方找到的常见位置，或点“选择…”手动指定。游戏 1.0 有两种存档位置，在游戏的世界列表里分别显示为“本地”和“Steam 云”：
+   - 本地：`%USERPROFILE%\Saved Games\keen games\Enshrouded\default`
+   - Steam 云：Steam 安装目录下的 `userdata\<账号目录>\1203620\remote`（例如 `D:\Program Files (x86)\Steam\userdata\…\1203620\remote`）
+   - 抢先体验版旧存档：`%USERPROFILE%\Saved Games\enshrouded`
+5. **这台电脑上的世界文件**（游戏 1.0 世界）：游戏 1.0 里每个世界是一个 `worldN.ksd`，编号在每台电脑上可能不同。列表按修改时间排列，选择与共享世界对应的那个文件；本机还没有这个世界就选“新建 worldN.ksd”，之后从云端恢复。首次设置不会自动选择，避免误把你自己的单人世界当成共享世界。
+6. 点“检查文件清单”，核对会上传和恢复的文件，以及“保持不动”的文件。
+7. 勾选两项确认（文件组已核对、Steam Cloud 已处理），点“保存并连接”。
 
 访问码保存在 Windows 凭据管理器，不写入配置文件。以后点左下角“设置”可以重新修改。
 
 **处理 Steam Cloud**：避免它与工具覆盖同一批文件。关闭游戏的 Cloud 也可能影响角色云同步，先备份角色与现有世界。工具不会自动更改 Steam 设置。
 
-**存档识别边界**：按云端配置的 8 位世界文件标识，管理该文件及以 `标识_`、`标识-`、`标识.` 开头的同组平面文件。不能根据游戏内的世界名称自动证明对应关系，也不解析游戏内部的二进制格式。同一标识对应的本地槽位会被所选备份替换，所以首次必须人工核对，不能把其他世界的标识当成共享世界。其他标识的世界和 `characters` 等角色文件不会进入快照；路径中的符号链接或目录联接会被拒绝。
+**存档识别边界**：
+
+- **游戏 1.0 世界**（服务器上的世界标识为 `world.ksd`）：只管理你选择的那一个 `worldN.ksd`。云端统一保存为 `world.ksd`，上传时从本机槽位读取，恢复时写回本机槽位，所以两台电脑的编号不同也没关系。`character*.ksd`（角色）、`global.ksd`、`user_settings.json`、其他 `worldN.ksd`，以及游戏自己的 `backup/`、`migrated/` 都不会被上传或覆盖。
+- **抢先体验版世界**（8 位小写十六进制标识）：管理该文件及以 `标识_`、`标识-`、`标识.` 开头的同组平面文件，与 1.0.0 相同。
+- 工具不解析游戏的二进制格式，也不能根据游戏内的世界名称自动证明对应关系，所以首次必须人工核对。所选槽位会被恢复的存档替换（替换前自动备份）。路径中的符号链接或目录联接会被拒绝。
+- `migrated/` 里是游戏 1.0 转换前的旧存档，游戏已经不再读取，不要拿它当最新进度。
 
 ## 日常使用
 
@@ -110,8 +117,9 @@ vault user add --id user_a --name A
 vault user add --id user_b --name B
 vault library add --id friends --name 共同存档库
 
-# 3ad85aea 仅为示例，必须换成你的世界主文件的 8 位小写十六进制标识。
-vault world add --id shared --library friends --name 共同世界 --save-key 3ad85aea
+# 游戏 1.0 的世界：标识固定写 world.ksd（每台电脑在客户端设置里选择自己的 worldN.ksd）。
+vault world add --id shared --library friends --name 共同世界 --save-key world.ksd
+# 抢先体验版旧存档才使用 8 位小写十六进制标识，例如：--save-key 3ad85aea
 
 vault member grant --user me --library friends
 vault member grant --user user_a --library friends
@@ -136,6 +144,15 @@ vault member grant --user user_b --library friends --write=false
 ```
 
 只读成员能查看和恢复，但不能上传（客户端会显示“只读”）。凭证的 `last_used_since_start` 是本次服务启动以来最近一次使用的时间，服务重启后归零；完整的操作记录查看 `journalctl -u enshrouded-save`。日志不记录访问码。访问码 7 天内到期时，客户端会提醒联系管理员更换。
+
+## 从 1.0.0 升级（游戏 1.0 存档）
+
+1.0.0 只认识抢先体验版的 8 位标识，无法管理游戏 1.0 的 `worldN.ksd`。升级顺序：
+
+1. **服务端**：备份数据目录，停止服务，替换为 1.1.0 的二进制，再启动。已有的世界和备份不受影响。
+2. **建立 1.0 世界**：`vault world add --id <新ID> --library friends --name <名称> --save-key world.ksd`。世界标识创建后不能修改，所以 1.0 世界需要新建，不要沿用旧的 8 位标识世界。
+3. **客户端**：每位玩家换成 1.1.0 的 EXE，在“设置”里选择新世界和自己电脑上的 `worldN.ksd`。
+4. **先用副本验证**：第一次交接前，先复制一份 `worldN.ksd` 到另一台电脑（可以换一个编号），确认游戏能在世界列表里看到并正常加载。
 
 ## 服务限制、备份和升级
 
@@ -180,6 +197,7 @@ Windows 上也可以运行 `scripts/build-client.ps1`。跨端联调：先把当
 
 - Go：身份授权、撤销/过期/停用、跨库隔离、伪造上传者、幂等、搜索分页、配额、损坏归档、链接/路径拒绝、重启与单写进程锁。
 - C# 核心：检查变化、只处理选定世界、快照校验、部分恢复失败回滚、重启恢复、拒绝恶意路径与链接、待上传任务和 HTTP 凭证策略；对真实 Go 服务端的身份识别、中文备注上传/搜索、幂等重试、下载、本地恢复和撤销令牌。
+- 游戏 1.0 存档：服务端只接受 `world.ksd` 一个文件，拒绝 `world0.ksd`、`character0.ksd`、`global.ksd`、游戏备份等；客户端从槽位 0 上传、恢复到另一台电脑的槽位 2/3/5（含新建槽位），部分写入失败回滚、恢复中断后重启回滚，其他世界、角色、`global.ksd`、`backup/`、`migrated/` 均保持不变；真实 Go 服务端与 C# 客户端之间完成同样的上传、下载和跨槽位恢复。
 - 桌面客户端：在 macOS 上以真实 Go 服务端走通正式模式的首次设置 → 连接 → 列表 → 游戏运行时锁定 → 游戏退出后自动检查；访问码不写入设置文件。演示模式走通上传、切换身份、恢复、翻页选择、检查失败提示和浅色/深色切换。
 
-**尚需在 Windows 实机验收**：窗口与高 DPI 显示、Windows 凭据管理器、游戏进程识别、真实世界文件组织、Steam Cloud 冲突处理，以及两台电脑轮流加载。这里没有把 macOS 上的测试当作 Windows 或游戏实测。请先用世界存档的副本完成两台 Windows 电脑的交接验收，再接入唯一的正式进度。
+**尚需在 Windows 实机验收**：窗口与高 DPI 显示、Windows 凭据管理器、游戏进程识别、Steam Cloud 冲突处理，以及两台电脑轮流加载。游戏 1.0 方面还要确认：只复制 `worldN.ksd`（不带 `global.ksd`）、并改成另一个编号后，游戏能在世界列表里看到并正常加载；这是依据服务器托管商的迁移说明做出的判断，Keen 官方尚未公开文件格式说明。这里没有把 macOS 上的测试当作 Windows 或游戏实测。请先用世界存档的副本完成两台 Windows 电脑的交接验收，再接入唯一的正式进度。
